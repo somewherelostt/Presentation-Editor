@@ -9,6 +9,8 @@ import LandingPage from "./components/LandingPage";
 import PresentationApp from "./components/PresentationApp";
 import "./App.css";
 
+const API_BASE_URL = process.env.REACT_APP_API_URL || "http://localhost:3001";
+
 function App() {
   return (
     <Router>

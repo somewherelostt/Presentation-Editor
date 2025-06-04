@@ -11,7 +11,7 @@ import {
   FaInfoCircle,
 } from "react-icons/fa";
 
-const API_URL = "http://localhost:3001/api";
+const API_BASE_URL = process.env.REACT_APP_API_URL || "http://localhost:3001";
 
 function PresentationApp() {
   const [slides, setSlides] = useState([]);
@@ -35,12 +35,15 @@ function PresentationApp() {
   const fetchSlides = async () => {
     try {
       setIsLoading(true);
-      const response = await axios.get(`${API_URL}/slides`);
-      console.log("Fetched slides:", response.data);
-      if (response.data.length === 0) {
-        await handleAddSlide();
-      } else {
-        setSlides(response.data);
+      const response = await fetch(`${API_BASE_URL}/api/slides`);
+      if (!response.ok) {
+        throw new Error("Failed to fetch slides");
+      }
+      const data = await response.json();
+      setSlides(data);
+      if (data.length > 0) {
+        setCurrentSlideIndex(0);
+        setEditedContent(data[0].content);
       }
     } catch (error) {
       console.error("Error fetching slides:", error);
@@ -52,21 +55,30 @@ function PresentationApp() {
 
   const handleAddSlide = async () => {
     try {
-      const newSlide = {
-        content: `# New Slide ${
-          slides.length + 1
-        }\n\nStart typing your content here...\n\n- Use markdown for formatting\n- Add bullet points\n- Include images or links`,
-        order: slides.length,
-        layout: "default",
-      };
-      const response = await axios.post(`${API_URL}/slides`, newSlide);
-      console.log("Created new slide:", response.data);
-      setSlides([...slides, response.data]);
+      const response = await fetch(`${API_BASE_URL}/api/slides`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          content: "# New Slide\n\nStart typing here...",
+          order: slides.length + 1,
+          layout: "default",
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to create new slide");
+      }
+
+      const newSlide = await response.json();
+      setSlides([...slides, newSlide]);
       setCurrentSlideIndex(slides.length);
-      setIsEditing(true);
+      setEditedContent(newSlide.content);
+      setError(null);
     } catch (error) {
-      console.error("Error adding slide:", error);
-      setError("Failed to add new slide. Please try again.");
+      console.error("Error creating new slide:", error);
+      setError("Failed to create new slide. Please try again.");
     }
   };
 
@@ -77,33 +89,34 @@ function PresentationApp() {
     }
 
     try {
-      const updatedSlide = {
-        ...slides[currentSlideIndex],
-        content: editedContent,
-        order: currentSlideIndex,
-      };
-
-      const response = await axios.put(
-        `${API_URL}/slides/${updatedSlide.id}`,
-        updatedSlide
+      const response = await fetch(
+        `${API_BASE_URL}/api/slides/${slides[currentSlideIndex].id}`,
+        {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            content: editedContent,
+            order: currentSlideIndex,
+            layout: slides[currentSlideIndex].layout,
+          }),
+        }
       );
 
-      if (response.data) {
-        const updatedSlides = [...slides];
-        updatedSlides[currentSlideIndex] = response.data;
-        setSlides(updatedSlides);
-        setIsEditing(false);
-        setError(null);
-      } else {
-        throw new Error("No data received from server");
+      if (!response.ok) {
+        throw new Error("Failed to save changes");
       }
+
+      const updatedSlide = await response.json();
+      const updatedSlides = [...slides];
+      updatedSlides[currentSlideIndex] = updatedSlide;
+      setSlides(updatedSlides);
+      setIsEditing(false);
+      setError(null);
     } catch (error) {
       console.error("Error saving changes:", error);
-      setError(
-        error.response?.data?.details ||
-          error.response?.data?.error ||
-          "Failed to save changes. Please try again."
-      );
+      setError("Failed to save changes. Please try again.");
     }
   };
 
